@@ -15,11 +15,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    volumes:
-      # Persist MySQL data (optional - uncomment if needed)
-      # - hackazon_mysql:/var/lib/mysql
-      # Persist logs (optional - uncomment if needed)
-      # - hackazon_logs:/var/log
+    # volumes:
+    #   # Persist MySQL data (optional - uncomment if needed)
+    #   - hackazon_mysql:/var/lib/mysql
+    #   # Persist logs (optional - uncomment if needed)
+    #   - hackazon_logs:/var/log
     networks:
       - hackazon_network
 

@@ -3,9 +3,14 @@
 # =============================================================================
 # This is a deliberately vulnerable web application for security testing
 # and training purposes. DO NOT deploy in production environments.
+#
+# Note: Uses Ubuntu 14.04 and PHP 5 as Hackazon was designed for these versions.
+# Modern PHP versions (7.2+) have breaking changes that prevent Hackazon from
+# running. This is acceptable for a security training tool used in isolated
+# environments.
 # =============================================================================
 
-FROM ubuntu:22.04
+FROM ubuntu:14.04
 
 LABEL maintainer="v0rt3x"
 LABEL description="All-in-one Hackazon container for security testing and training"
@@ -13,33 +18,24 @@ LABEL version="2.0"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=UTC
 
-# Install dependencies in a single layer to reduce image size
+# Install dependencies
 RUN apt-get update && apt-get -y upgrade && \
-    apt-get -y install --no-install-recommends \
-    # Database
+    apt-get -y install \
     mysql-client \
     mysql-server \
-    # Web server
     apache2 \
-    libapache2-mod-php \
-    # PHP and extensions
-    php \
-    php-mysql \
-    php-ldap \
-    php-xml \
-    php-mbstring \
-    php-curl \
-    php-gd \
-    php-zip \
-    # Utilities
+    libapache2-mod-php5 \
+    php5-mysql \
+    php5-ldap \
+    php5-curl \
+    php5-gd \
+    pwgen \
     supervisor \
+    vim-tiny \
     unzip \
     curl \
-    ca-certificates \
     && \
-    # Clean up apt cache to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -51,14 +47,14 @@ RUN mkdir -p /var/log/supervisor /var/run/mysqld && \
 COPY ./scripts/start.sh /start.sh
 COPY ./scripts/passwordHash.php /passwordHash.php
 COPY ./scripts/foreground.sh /etc/apache2/foreground.sh
-COPY ./configs/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY ./configs/supervisord.conf /etc/supervisor/supervisord.conf
 COPY ./configs/000-default.conf /etc/apache2/sites-available/000-default.conf
 
 # Make scripts executable
 RUN chmod +x /start.sh /etc/apache2/foreground.sh
 
 # Download and setup Hackazon
-RUN rm -rf /var/www/html && \
+RUN rm -rf /var/www/ && \
     curl -L -o /hackazon-master.zip https://github.com/rapid7/hackazon/archive/master.zip && \
     unzip /hackazon-master.zip -d /tmp && \
     mkdir -p /var/www && \
@@ -81,14 +77,14 @@ RUN chown -R www-data:www-data /var/www/hackazon && \
                  /var/www/hackazon/assets/config
 
 # Enable Apache modules
-RUN a2enmod rewrite headers
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+RUN a2enmod rewrite
 
 # Expose HTTP port
 EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -sf http://localhost/ || exit 1
 
 # Start services
 CMD ["/bin/bash", "/start.sh"]

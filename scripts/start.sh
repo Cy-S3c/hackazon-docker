@@ -2,7 +2,6 @@
 # =============================================================================
 # Hackazon Container Startup Script
 # =============================================================================
-set -e
 
 echo "=========================================="
 echo "Starting Hackazon Container"
@@ -11,13 +10,12 @@ echo "=========================================="
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-MYSQL_USER="root"
 HACKAZON_DB="hackazon"
 HACKAZON_USER="hackazon"
 
-# Generate secure random passwords using /dev/urandom
+# Generate secure random passwords
 generate_password() {
-    tr -dc 'A-Za-z0-9!@#$%^&*' < /dev/urandom | head -c 16
+    tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16
 }
 
 MYSQL_PASSWORD=$(generate_password)
@@ -26,23 +24,13 @@ HACKAZON_PASSWORD=$(generate_password)
 echo "[INFO] Generated secure passwords"
 
 # -----------------------------------------------------------------------------
-# Initialize MySQL data directory if needed
-# -----------------------------------------------------------------------------
-if [ ! -d "/var/lib/mysql/mysql" ]; then
-    echo "[INFO] Initializing MySQL data directory..."
-    mysqld --initialize-insecure --user=mysql
-fi
-
-# -----------------------------------------------------------------------------
 # Start MySQL
 # -----------------------------------------------------------------------------
 echo "[INFO] Starting MySQL..."
+# Touch files to overcome overlay filesystem issues on Mac/Windows
 find /var/lib/mysql -type f -exec touch {} \; 2>/dev/null || true
-chown -R mysql:mysql /var/lib/mysql /var/run/mysqld
-
-# Start MySQL in the background
-mysqld_safe --skip-grant-tables &
-MYSQL_PID=$!
+/usr/bin/mysqld_safe &
+sleep 10
 
 # Wait for MySQL to be ready
 echo "[INFO] Waiting for MySQL to start..."
@@ -59,25 +47,27 @@ for i in {1..30}; do
 done
 
 # -----------------------------------------------------------------------------
-# Configure MySQL Security
+# Configure MySQL
 # -----------------------------------------------------------------------------
-echo "[INFO] Configuring MySQL security..."
+echo "[INFO] Configuring MySQL..."
 
-# Set root password and create hackazon user
-mysql -u root <<EOF
-FLUSH PRIVILEGES;
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_PASSWORD}';
+# Set root password
+mysqladmin -u root password "${MYSQL_PASSWORD}"
+
+# Create database and user
+mysql -uroot -p${MYSQL_PASSWORD} -e "
 CREATE DATABASE IF NOT EXISTS ${HACKAZON_DB};
-CREATE USER IF NOT EXISTS '${HACKAZON_USER}'@'localhost' IDENTIFIED BY '${HACKAZON_PASSWORD}';
-GRANT ALL PRIVILEGES ON ${HACKAZON_DB}.* TO '${HACKAZON_USER}'@'localhost';
+GRANT ALL PRIVILEGES ON ${HACKAZON_DB}.* TO '${HACKAZON_USER}'@'localhost' IDENTIFIED BY '${HACKAZON_PASSWORD}';
 FLUSH PRIVILEGES;
-EOF
+"
+
+echo "[INFO] MySQL configured"
 
 # -----------------------------------------------------------------------------
 # Import Database Schema
 # -----------------------------------------------------------------------------
 echo "[INFO] Importing database schema..."
-mysql -u${HACKAZON_USER} -p${HACKAZON_PASSWORD} ${HACKAZON_DB} < "/var/www/hackazon/database/createdb.sql"
+mysql -uroot -p${MYSQL_PASSWORD} ${HACKAZON_DB} < "/var/www/hackazon/database/createdb.sql"
 
 # -----------------------------------------------------------------------------
 # Update Application Configuration
@@ -90,26 +80,26 @@ sed -i "s/youradminpass/${HACKAZON_PASSWORD}/" /var/www/hackazon/assets/config/p
 
 # Hash password for admin user
 HASHED_PASSWORD=$(php /passwordHash.php "${HACKAZON_PASSWORD}")
-mysql -u${HACKAZON_USER} -p${HACKAZON_PASSWORD} -e \
+mysql -uroot -p${MYSQL_PASSWORD} -e \
     "UPDATE ${HACKAZON_DB}.tbl_users SET password='${HASHED_PASSWORD}' WHERE username='admin';"
 
 # -----------------------------------------------------------------------------
-# Save Credentials (for reference)
+# Save Credentials
 # -----------------------------------------------------------------------------
 echo "[INFO] Saving credentials..."
-cat > /credentials.txt <<EOF
-========================================
+cat > /credentials.txt <<CREDS
+==========================================
 Hackazon Credentials
-========================================
+==========================================
 MySQL Root Password: ${MYSQL_PASSWORD}
 Hackazon DB Password: ${HACKAZON_PASSWORD}
 Hackazon Admin User: admin
 Hackazon Admin Password: ${HACKAZON_PASSWORD}
-========================================
-EOF
+==========================================
+CREDS
 chmod 600 /credentials.txt
 
-# Also save individual files for backwards compatibility
+# Backwards compatibility
 echo "${MYSQL_PASSWORD}" > /mysql-root-pw.txt
 echo "${HACKAZON_PASSWORD}" > /hackazon-db-pw.txt
 chmod 600 /mysql-root-pw.txt /hackazon-db-pw.txt
@@ -126,7 +116,7 @@ echo "Admin Credentials:"
 echo "  Username: admin"
 echo "  Password: ${HACKAZON_PASSWORD}"
 echo ""
-echo "Credentials are also saved in /credentials.txt"
+echo "Credentials saved in /credentials.txt"
 echo "=========================================="
 echo ""
 
@@ -134,11 +124,11 @@ echo ""
 # Stop MySQL (Supervisor will restart it)
 # -----------------------------------------------------------------------------
 echo "[INFO] Stopping MySQL for Supervisor takeover..."
-mysqladmin -u root -p${MYSQL_PASSWORD} shutdown 2>/dev/null || killall mysqld 2>/dev/null || true
-sleep 3
+killall mysqld 2>/dev/null || true
+sleep 5
 
 # -----------------------------------------------------------------------------
 # Start Supervisor
 # -----------------------------------------------------------------------------
 echo "[INFO] Starting Supervisor..."
-exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf
+exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf

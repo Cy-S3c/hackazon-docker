@@ -23,8 +23,8 @@ Hackazon is a free, vulnerable test site designed by Rapid7 for testing security
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/all-in-one-hackazon.git
-cd all-in-one-hackazon
+git clone https://github.com/Cy-S3c/hackazon-docker.git
+cd hackazon-docker
 
 # Build and run
 docker compose up -d
@@ -70,11 +70,13 @@ docker exec hackazon cat /credentials.txt
 
 | Component | Description |
 |-----------|-------------|
-| Ubuntu 22.04 | Base operating system |
+| Ubuntu 14.04 | Base operating system (required for Hackazon compatibility) |
 | Apache 2.4 | Web server |
-| PHP 8.x | Server-side scripting |
-| MySQL 8.0 | Database server |
+| PHP 5.x | Server-side scripting (Hackazon requires PHP < 7.2) |
+| MySQL 5.5 | Database server |
 | Supervisor | Process manager |
+
+> **Note:** Hackazon was designed for older PHP versions. Modern PHP (7.2+) has breaking changes that prevent Hackazon from running. This is acceptable for a security training tool used in isolated environments.
 
 ## Project Structure
 
