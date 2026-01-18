@@ -35,6 +35,7 @@ RUN apt-get update && apt-get -y upgrade && \
     vim-tiny \
     unzip \
     curl \
+    ssmtp \
     && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -67,6 +68,7 @@ RUN rm -rf /var/www/ && \
 # Copy application configuration files
 COPY ./configs/parameters.php /var/www/hackazon/assets/config/parameters.php
 COPY ./configs/rest.php /var/www/hackazon/assets/config/rest.php
+COPY ./configs/email.php /var/www/hackazon/assets/config/email.php
 COPY ./configs/createdb.sql /var/www/hackazon/database/createdb.sql
 
 # Set proper ownership and permissions
